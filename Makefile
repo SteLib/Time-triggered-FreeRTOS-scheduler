@@ -22,12 +22,13 @@ LDFLAGS = -mcpu=$(MACH) -mthumb -T mps2_m3.ld -nostartfiles
 
 # --- Source Files ---
 # Your application files
-SRCS = main.c startup.c uart.c
+SRCS = main.c startup.c uart.c scheduler.c
 
 # FreeRTOS core kernel files
 SRCS += $(FREERTOS_DIR)/tasks.c 
 SRCS += $(FREERTOS_DIR)/queue.c 
 SRCS += $(FREERTOS_DIR)/list.c 
+SRCS += $(FREERTOS_DIR)/timers.c
 
 # FreeRTOS port and heap implementation
 SRCS += $(FREERTOS_DIR)/portable/GCC/ARM_CM3/port.c
