@@ -1,34 +1,56 @@
 #include "scheduler.h"
+# include "uart.h"
 
-extern SemaphoreHandle_t semaphore; //because it is defined into main.c file
 extern SubFrame_t major_frame[NUM_SUB_FRAMES];
-static int8_t n_current_sf = 0;    //to count the current subframe number for eache major frame
 
-//function to handle sub-frame frame in the major-frame
-void dispatcher (){
-    for(;;) {
-        if(xSemaphoreTake(semaphore, portMAX_DELAY) == pdTRUE) {
-            // execute hrt task if exist
-            if (major_frame[n_current_sf].hrt_task != NULL) {
-                vTaskResume(major_frame[n_current_sf].hrt_task);
-            }
-            // execute all SRT tasks associated to this sub-frame
-            for (uint8_t i = 0; i < major_frame[n_current_sf].num_srt_tasks; i++) {
-                if (major_frame[n_current_sf].srt_tasks[i] != NULL) {
-                    vTaskResume(major_frame[n_current_sf].srt_tasks[i]);
-                }
-            }
-        }
+// this pointer will be read by tasks.c
+// it contains the configuration of the timeline and the tasks to be executed, 
+//and it is set by vConfigureScheduler() when the user calls it in main.c
+TimelineConfig_t* pxTimelineState = NULL;
 
-        //increase counter of executed subframe until complete major frame
-        n_current_sf++;
-        if(n_current_sf > NUM_SUB_FRAMES - 1) {
-            n_current_sf = 0;
-        }
+
+// =========================================================================
+// CONFIGURATION OF THE SCHEDULER
+// =========================================================================
+void vConfigureScheduler(TimelineConfig_t *cfg) {
+    if (cfg == NULL || cfg->tasks == NULL || cfg->task_count == 0) {
+        UART_printf("Error: Timeline configuration not valid!\n");
+        return;
     }
 
-}
+    /// save the config into the pointer
+    pxTimelineState = cfg;
 
-void vConfigureScheduler(){}
+    UART_printf("Initialization of Time-Triggered Scheduler\n");
+    UART_printf("Task totali configurati: %d\n", cfg->task_count);
+
+    // we're creating the task and suspend them immeditaly
+    for (uint32_t i = 0; i < cfg->task_count; i++) {
+        TimelineTaskConfig_t* t = &cfg->tasks[i];
+
+        // state not completed for the current subframe
+        t->is_completed = 0;
+        t->xHandle = NULL;
+
+        // ------------------------- CREATION OF THE TASKS ---------------------------- 
+        // we set priority to 1 for all task since the scheduler is timeline-based
+        BaseType_t xReturned = xTaskCreate(
+            t->function,
+            t->task_name,
+            configMINIMAL_STACK_SIZE * 2, // Aumenta se i tuoi task fanno calcoli pesanti
+            NULL,
+            1, // Priorità fittizia
+            &(t->xHandle)
+        );
+
+        if (xReturned == pdPASS) {
+            vTaskSuspend(t->xHandle); // because is kernel's work
+            
+            UART_printf("[+] Task created and suspended: %s\n", t->task_name);
+        } else {
+            UART_printf("[-] Error creating task: %s\n", t->task_name);
+        }
+    }
+}
 
   

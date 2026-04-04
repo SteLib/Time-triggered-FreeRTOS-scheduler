@@ -1,21 +1,14 @@
 #include "FreeRTOS.h"
 #include "task.h"
-#include "uart.h"
-#include "semphr.h"
-#include "timers.h"
+#include "uart.h
 #include "scheduler.h"
 
-#define SUB_FRAME_PERIOD pdMS_TO_TICKS( 100 ) 
-
-SemaphoreHandle_t semaphore;
-static TimerHandle_t xAutoReloadTimer;
-static TaskHandle_t Task_HRT;
-static TaskHandle_t Task1_SRT;
-static TaskHandle_t Task2_SRT;
-BaseType_t xTimerStarted;
+#define SUB_FRAME_PERIOD pdMS_TO_TICKS( 100 )
 
 //a major frame is composed by n sub frame
 SubFrame_t major_frame [NUM_SUB_FRAMES];
+
+//--------------------- DECLARATION OF TASKS ---------------------
 
 // Task Hard Real-Time (priority 2)
 void Task_HRT_Code( void *pvParameters ) {
@@ -27,7 +20,7 @@ void Task_HRT_Code( void *pvParameters ) {
 
         // 2. job done for this subframe.
         // The task suspends itself and yields the CPU to SRT tasks (Priority 1).
-        vTaskSuspend(NULL); 
+        //vTaskSuspend(NULL); 
     }
 }
 
@@ -41,7 +34,7 @@ void Task1_SRT_Code( void *pvParameters ) {
 
         // 2. job done
         // suspension of task which yields the CPU to the Idle task (Priority 0)
-        vTaskSuspend(NULL); 
+        //vTaskSuspend(NULL); 
     }
 }
 
@@ -55,63 +48,36 @@ void Task2_SRT_Code( void *pvParameters ) {
 
         // 2. job done
         // suspension of task which yields the CPU to the Idle task (Priority 0)
-        vTaskSuspend(NULL); 
+        //vTaskSuspend(NULL); 
     }
 }
 
-static void prvAutoReloadTimerCallback(TimerHandle_t xTimer) {
-   xSemaphoreGive(semaphore)  ; 
-}
+TimelineTask_t timeline_tasks[] = {
+// name, code, type, start_time, end_time, subframe_index
+    {"Task_HRT", Task_HRT_Code, HARD_RT, 0, 50,  0},
+    {"Task1_SRT", Task1_SRT_Code, SOFT_RT, 0, 0,  0}, // start and end time for SRT are not relevant
+    {"Task2_SRT", Task2_SRT_Code, SOFT_RT, 0, 0,  0 } // since they are executed only on IDLE time
+};
+// --------------------- TIMELINE CONFIG ---------------------
+TimelineConfig_t system_timeline = {
+    .tasks = timeline_tasks,
+    .tasks_num = 3,
+    .num_subframes = NUM_SUB_FRAMES,
+    .subframe_period = SUB_FRAME_PERIOD,
+    .major_frame_period = major_frame
+};
 
+// --------------------- MAIN ---------------------
 int main( void ) {
 
     UART_init();
-
     UART_printf( "System Booting...\n" );
-
-    semaphore = xSemaphoreCreateBinary (); 
     
-    xTaskCreate(Task_HRT_Code, "Task Hard", 128, NULL, 2, &Task_HRT);
-    vTaskSuspend(Task_HRT); 
-    xTaskCreate(Task1_SRT_Code, "Task Soft 1", 128, NULL, 1, &Task1_SRT); //si può provare anche con più srt
-    vTaskSuspend(Task1_SRT); 
-    xTaskCreate(Task2_SRT_Code, "Task Soft 2", 128, NULL, 1, &Task2_SRT); //si può provare anche con più srt
-    vTaskSuspend(Task2_SRT); 
-    
-    // use first sub-frame as example
-    major_frame[0].hrt_task = Task_HRT;
-    major_frame[0].srt_tasks[0] = Task1_SRT;
-    major_frame[0].srt_tasks[1] = Task2_SRT;
-    major_frame[0].num_srt_tasks = 2;
+    // pass the configuration of the scheduler to initialize the major frame and subframes    
+    vConfigureScheduler(&system_timeline);
 
-    // TODO: create other sub-frame as example
-
-    //first real executed task with highest riority to handle the sub frame
-    xTaskCreate(dispatcher, "Dispatcher", 128, NULL, 3, NULL);
-
-    xAutoReloadTimer = xTimerCreate(
-        /* Text name for the software timer - not used by FreeRTOS. */
-        "AutoReloadSubFrame",
-        /* The software timer's period in ticks. */
-        SUB_FRAME_PERIOD,
-        /* Setting uxAutoRealod to pdTRUE creates an auto-reload timer. */
-        pdTRUE,
-         /* does not use the timer id. */
-        0,
-         /* Callback function to be used by the software timer being created. */
-        prvAutoReloadTimerCallback 
-    );
- 
-    /* Check the software timers were created. */
-    if( xAutoReloadTimer != NULL ) {
-    /* Start the software timers, using a block time of 0 (no block time).
-    The scheduler has not been started yet so any block time specified
-    here would be ignored anyway. */
-    xTimerStarted = xTimerStart( xAutoReloadTimer, 0 );
-    }
-    
     vTaskStartScheduler();
-    
+
     while( 1 );
     return 0;
 }

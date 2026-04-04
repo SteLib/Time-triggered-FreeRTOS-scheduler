@@ -44,7 +44,7 @@
 
 #define configUSE_PREEMPTION                     1
 #define configUSE_IDLE_HOOK                      0
-#define configUSE_TICK_HOOK                      0
+#define configUSE_TICK_HOOK                      1 // to allow the scheduler to manage the execution of tasks based on the subframe timing
 #define configCPU_CLOCK_HZ                       ( ( unsigned long ) 25000000 )
 #define configTICK_RATE_HZ                       ( ( TickType_t ) 1000 )
 #define configMINIMAL_STACK_SIZE                 ( ( unsigned short ) 80 )
@@ -95,6 +95,9 @@
 #define INCLUDE_xTaskAbortDelay                   1
 #define INCLUDE_xTaskGetHandle                    1
 
+// disable time slicing to ensure that SRT tasks only run when HRT tasks are not running
+// and that the Idle task only runs when no other tasks are running.
+#define configUSE_TIME_SLICING					  0 
 /* This demo makes use of one or more example stats formatting functions. These
  * format the raw data provided by the uxTaskGetSystemState() function in to human
  * readable ASCII form.  See the notes in the implementation of vTaskList() within
@@ -114,7 +117,7 @@
 
 /* Use the Cortex-M3 optimised task selection rather than the generic C code
  * version. */
-#define configUSE_PORT_OPTIMISED_TASK_SELECTION          1
+#define configUSE_PORT_OPTIMISED_TASK_SELECTION          0 // QEMU doesn't model the CLZ instruction, so don't use the Cortex-M3 optimised task selection code.
 
 /* The Win32 target is capable of running all the tests tasks at the same
  * time. */
