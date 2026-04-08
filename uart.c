@@ -36,6 +36,16 @@ static void UART_print_string( char *string )
     while (*string) UART0_DATA = (unsigned int)(*string++);
 }
 
+static void UART_print_hex( unsigned int value )
+{
+    char hex_chars[] = "0123456789ABCDEF";
+    UART_print_string("0x");
+    for (int i = 28; i >= 0; i -= 4)
+    {
+        UART0_DATA = hex_chars[(value >> i) & 0xF];
+    }
+}
+
 void UART_printf( const char *s, ... )
 {
     /* Critical section prevents SRT/HRT deadlocks during printing */
@@ -49,25 +59,38 @@ void UART_printf( const char *s, ... )
         if (*s == '%') 
         {
             s++; 
-            if (*s == 'd') 
+	    if (*s == 'd' || *s == 'i')
             {
                 int value = va_arg( args, int );
                 UART_print_int( value );
             }
-            else if (*s == 's') /* ADDED: Handle %s */
+            else if (*s == 'u')
+            {
+                unsigned int value = va_arg( args, unsigned int );
+                UART_print_int( (int)value ); // Riutilizziamo print_int per semplicità
+            }
+            else if (*s == 's')
             {
                 char *string = va_arg( args, char* );
-                UART_print_string( string );
+                if (string == NULL) UART_print_string("(null)");
+                else UART_print_string( string );
             }
-            s++;
-        } 
-        else 
+            else if (*s == 'p' || *s == 'x')
+            {
+                unsigned int value = (unsigned int)va_arg( args, void* );
+                UART_print_hex( value );
+            }
+            s++; // Passa al carattere dopo la specifica (es. dopo 'd')
+        }
+        else
         {
             UART0_DATA = (unsigned int)(*s);
             s++;
         }
     }
+
     va_end( args );
 
+    /* IMPORTANTE: Devi uscire dalla sezione critica o il sistema si blocca! */
     taskEXIT_CRITICAL();
 }

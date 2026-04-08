@@ -4,6 +4,17 @@
 #include "FreeRTOS.h"
 #include "task.h"
 
+// --- 1. AGGIUNTO: Definizione TaskType_t (Mancava e bloccava tutto) ---
+typedef enum {
+    HARD_RT,
+    SOFT_RT
+} TaskType_t;
+
+// --- 2. AGGIUNTO: Definizione minima di SubFrame_t (Mancava) ---
+typedef struct {
+    uint32_t id;
+} SubFrame_t;
+
 #define MAJOR_FRAME_DURATION                    ( ( TickType_t ) 1000 ) //1 ms for each major frame
 #define SUB_FRAME_DURATION                      ( ( TickType_t ) 100 ) //1/10 ms for each sub frame
 #define NUM_SUB_FRAMES                          (MAJOR_FRAME_DURATION / SUB_FRAME_DURATION)
@@ -26,6 +37,7 @@ typedef struct {
 typedef struct{
         TimelineTaskConfig_t* tasks;
         uint32_t tasks_num;
+	uint32_t num_sub_frames; //mancava!
         uint32_t major_frame_period;
         uint32_t sub_frame_period;
 } TimelineConfig_t;

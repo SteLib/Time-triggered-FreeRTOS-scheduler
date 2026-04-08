@@ -1,6 +1,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
-#include "uart.h
+#include "uart.h"
 #include "scheduler.h"
 
 #define SUB_FRAME_PERIOD pdMS_TO_TICKS( 100 )
@@ -20,7 +20,7 @@ void Task_HRT_Code( void *pvParameters ) {
 
         // 2. job done for this subframe.
         // The task suspends itself and yields the CPU to SRT tasks (Priority 1).
-        //vTaskSuspend(NULL); 
+        vTaskSuspend(NULL); 
     }
 }
 
@@ -35,6 +35,7 @@ void Task1_SRT_Code( void *pvParameters ) {
         // 2. job done
         // suspension of task which yields the CPU to the Idle task (Priority 0)
         //vTaskSuspend(NULL); 
+	vTaskDelay(pdMS_TO_TICKS(100));
     }
 }
 
@@ -52,28 +53,28 @@ void Task2_SRT_Code( void *pvParameters ) {
     }
 }
 
-TimelineTask_t timeline_tasks[] = {
+TimelineTaskConfig_t timeline_tasks[] = {
 // name, code, type, start_time, end_time, subframe_index
-    {"Task_HRT", Task_HRT_Code, HARD_RT, 0, 50,  0},
-    {"Task1_SRT", Task1_SRT_Code, SOFT_RT, 0, 0,  0}, // start and end time for SRT are not relevant
-    {"Task2_SRT", Task2_SRT_Code, SOFT_RT, 0, 0,  0 } // since they are executed only on IDLE time
+    {"Task_HRT", Task_HRT_Code, HARD_RT, 0, 40,  0, NULL, 0},
+    {"Task1_SRT", Task1_SRT_Code, SOFT_RT, 0, 0,  0, NULL, 0}, // start and end time for SRT are not relevant
+    {"Task2_SRT", Task2_SRT_Code, SOFT_RT, 0, 20,  0, NULL, 0} // since they are executed only on IDLE time
 };
 // --------------------- TIMELINE CONFIG ---------------------
 TimelineConfig_t system_timeline = {
     .tasks = timeline_tasks,
     .tasks_num = 3,
-    .num_subframes = NUM_SUB_FRAMES,
-    .subframe_period = SUB_FRAME_PERIOD,
-    .major_frame_period = major_frame
+    .num_sub_frames = NUM_SUB_FRAMES,
+    .major_frame_period = MAJOR_FRAME_DURATION,
+    .sub_frame_period = SUB_FRAME_DURATION,
+
 };
 
 // --------------------- MAIN ---------------------
 int main( void ) {
-
     UART_init();
     UART_printf( "System Booting...\n" );
-    
-    // pass the configuration of the scheduler to initialize the major frame and subframes    
+
+    // Ora il puntatore non sarà più NULL
     vConfigureScheduler(&system_timeline);
 
     vTaskStartScheduler();

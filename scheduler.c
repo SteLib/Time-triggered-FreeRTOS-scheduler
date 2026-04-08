@@ -13,8 +13,8 @@ TimelineConfig_t* pxTimelineState = NULL;
 // CONFIGURATION OF THE SCHEDULER
 // =========================================================================
 void vConfigureScheduler(TimelineConfig_t *cfg) {
-    if (cfg == NULL || cfg->tasks == NULL || cfg->task_count == 0) {
-        UART_printf("Error: Timeline configuration not valid!\n");
+    if (cfg == NULL || cfg->tasks == NULL || cfg->tasks_num == 0) {
+        UART_printf("Error: Timeline configuration not valid!\n", cfg);
         return;
     }
 
@@ -22,10 +22,10 @@ void vConfigureScheduler(TimelineConfig_t *cfg) {
     pxTimelineState = cfg;
 
     UART_printf("Initialization of Time-Triggered Scheduler\n");
-    UART_printf("Task totali configurati: %d\n", cfg->task_count);
+    UART_printf("Task totali configurati: %d\n", cfg->tasks_num);
 
     // we're creating the task and suspend them immeditaly
-    for (uint32_t i = 0; i < cfg->task_count; i++) {
+    for (uint32_t i = 0; i < cfg->tasks_num; i++) {
         TimelineTaskConfig_t* t = &cfg->tasks[i];
 
         // state not completed for the current subframe
@@ -39,7 +39,7 @@ void vConfigureScheduler(TimelineConfig_t *cfg) {
             t->task_name,
             configMINIMAL_STACK_SIZE * 2, // Aumenta se i tuoi task fanno calcoli pesanti
             NULL,
-            1, // Priorità fittizia
+	    (t->type == HARD_RT) ? 2 : 1, // HRT = 2, SRT = 1 per dare priorità maggiore ai task HRT
             &(t->xHandle)
         );
 
@@ -53,4 +53,39 @@ void vConfigureScheduler(TimelineConfig_t *cfg) {
     }
 }
 
-  
+void vApplicationTickHook(void) {
+    static uint32_t global_tick_count = 0;
+    uint32_t now = global_tick_count % pxTimelineState->major_frame_period;
+
+    for (uint32_t i = 0; i < pxTimelineState->tasks_num; i++) {
+        TimelineTaskConfig_t* t = &pxTimelineState->tasks[i];
+
+        if (t->type == HARD_RT) {
+            // Risveglia l'HRT SOLO al suo tempo di inizio
+            if (now == t->ulStart_time) {
+                t->is_completed = 0;
+                xTaskResumeFromISR(t->xHandle);
+            }
+            // Sospende l'HRT SOLO alla deadline (Enforcement)
+	    else if (now == t->ulEnd_time) {
+                t->is_completed = 1;
+                vTaskSuspend(t->xHandle);
+            }
+        }
+        else if (t->type == SOFT_RT) {
+            // Gli SRT devono essere sempre pronti (Ready)
+            // Se l'HRT è sospeso o non è ancora l'ora, gireranno loro.
+            xTaskResumeFromISR(t->xHandle);
+        }
+    }
+
+    // Ferma il test dopo 2 cicli (opzionale, per debug)
+    if (global_tick_count >= (pxTimelineState->major_frame_period * 2)) {
+        UART_printf("\n--- STOP TEST ---\n");
+        vTaskSuspendAll();
+        while(1);
+    }
+
+    global_tick_count++;
+    portYIELD_FROM_ISR(pdTRUE);
+}

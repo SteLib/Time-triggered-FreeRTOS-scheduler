@@ -54,15 +54,17 @@ SECTIONS
         _sidata = .;
     } > FLASH
 
+    _sidata = LOADADDR(.data);
+
     .data :
     {
         . = ALIGN(8);
         _data = .;
         _sdata = .;
         *(vtable)
-        *(.data)
+        *(.data*)
         _edata = .;
-    } > RAM
+    } > RAM AT > FLASH
 
     .bss :
     {

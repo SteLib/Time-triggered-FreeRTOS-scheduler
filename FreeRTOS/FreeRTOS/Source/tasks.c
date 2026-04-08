@@ -40,6 +40,9 @@
 #include "task.h"
 #include "timers.h"
 #include "stack_macros.h"
+// including our scheduling
+#include "scheduler.h"
+extern TimelineConfig_t* pxTimelineState;
 
 /* The default definitions are only available for non-MPU ports. The
  * reason is that the stack alignment requirements vary for different
@@ -5174,7 +5177,27 @@ BaseType_t xTaskIncrementTick( void )
             /* MISRA Ref 11.5.3 [Void pointer assignment] */
             /* More details at: https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/MISRA.md#rule-115 */
             /* coverity[misra_c_2012_rule_11_5_violation] */
-            taskSELECT_HIGHEST_PRIORITY_TASK();
+	    BaseType_t xHrtActive = pdFALSE;
+	    if( pxTimelineState != NULL ) {
+		    uint32_t now = xTickCount % pxTimelineState->major_frame_period;
+
+		    for( uint32_t i = 0; i < pxTimelineState->tasks_num; i++ ) {
+			    TimelineTaskConfig_t* t = &pxTimelineState->tasks[i];
+			    if (t->type == HARD_RT) {
+			            // Un HRT domina la CPU se siamo nella sua finestra e non ha finito
+			            if (now >= t->ulStart_time && now < t->ulEnd_time && t->is_completed == 0) {
+					    pxCurrentTCB = (TCB_t *) t->xHandle;
+					    xHrtActive = pdTRUE;
+					    break;
+				    }
+		    	    }
+		    }
+	    }
+
+	    if( xHrtActive == pdFALSE ) {
+        	    taskSELECT_HIGHEST_PRIORITY_TASK();
+	    }
+
             traceTASK_SWITCHED_IN();
 
             /* Macro to inject port specific behaviour immediately after
