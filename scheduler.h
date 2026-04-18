@@ -33,13 +33,17 @@ typedef struct {
     uint8_t is_completed; // flag to indicate if the task has completed its execution in the current subframe
 } TimelineTaskConfig_t;
 
-// system's globa state
+// system's global state
 typedef struct{
         TimelineTaskConfig_t* tasks;
         uint32_t tasks_num;
-	uint32_t num_sub_frames; //mancava!
+	    uint32_t num_sub_frames; //mancava!
         uint32_t major_frame_period;
         uint32_t sub_frame_period;
+
+        // --- Stato Dinamico del Sistema (I contatori mancanti) ---
+        uint32_t current_tick;        // Va da 0 a (major_frame_period - 1)
+        uint32_t current_sub_frame;   // Va da 0 a (num_sub_frames - 1)
 } TimelineConfig_t;
 
 // external reference to the major-frame array defined in main.c composed by sub-frame
@@ -48,3 +52,4 @@ extern SubFrame_t major_frame[NUM_SUB_FRAMES];
 void vConfigureScheduler(TimelineConfig_t* cfg); // inizialization of the timeline scheduler
 
 #endif
+void vTaskSetTimelineConfig(TaskHandle_t xTask, uint32_t ulStart, uint32_t ulEnd, uint8_t type);

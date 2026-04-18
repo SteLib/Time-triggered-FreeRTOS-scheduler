@@ -17,6 +17,8 @@ void Task_HRT_Code( void *pvParameters ) {
         UART_printf("execution of HRT Task...\n");
         
         //...
+        // (simulate some work by busy-waiting for a while)
+        for(volatile int i=0; i<10000; i++);
 
         // 2. job done for this subframe.
         // The task suspends itself and yields the CPU to SRT tasks (Priority 1).
@@ -24,32 +26,33 @@ void Task_HRT_Code( void *pvParameters ) {
     }
 }
 
-// Task Soft Real-Time (Priorità 1)
+// Task Soft Real-Time 1 (Priority 1)
 void Task1_SRT_Code( void *pvParameters ) {
     for(;;) {
-        // 1. do some less critical job
+        // 1. Fai il lavoro (meno critico)
         UART_printf("execution of SRT Task 1...\n");
         
-        //...
+        // (Simula il tempo di esecuzione)
+        for(volatile int i=0; i<5000; i++);
 
-        // 2. job done
-        // suspension of task which yields the CPU to the Idle task (Priority 0)
-        //vTaskSuspend(NULL); 
-	vTaskDelay(pdMS_TO_TICKS(100));
+        // 2. Lavoro finito per questo Major Frame!
+        // Mi sospendo da solo. Verrò risvegliato da tasks.c al prossimo tick 0.
+        vTaskSuspend(NULL); 
     }
 }
 
-// Task Soft Real-Time (Priorità 1)
+// Task Soft Real-Time 2 (Priority 1)
 void Task2_SRT_Code( void *pvParameters ) {
     for(;;) {
-        // 1. do some less critical job
+        // 1. Fai il lavoro (meno critico)
         UART_printf("execution of SRT Task 2...\n");
         
-        //...
+        // (Simula il tempo di esecuzione)
+        for(volatile int i=0; i<5000; i++);
 
-        // 2. job done
-        // suspension of task which yields the CPU to the Idle task (Priority 0)
-        //vTaskSuspend(NULL); 
+        // 2. Lavoro finito per questo Major Frame!
+        // Mi sospendo da solo. Verrò risvegliato da tasks.c al prossimo tick 0.
+        vTaskSuspend(NULL); 
     }
 }
 

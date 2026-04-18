@@ -44,7 +44,7 @@
 
 #define configUSE_PREEMPTION                     1
 #define configUSE_IDLE_HOOK                      0
-#define configUSE_TICK_HOOK                      1 // to allow the scheduler to manage the execution of tasks based on the subframe timing
+#define configUSE_TICK_HOOK                      0 // to allow the scheduler to manage the execution of tasks based on the subframe timing
 #define configCPU_CLOCK_HZ                       ( ( unsigned long ) 25000000 )
 #define configTICK_RATE_HZ                       ( ( TickType_t ) 1000 )
 #define configMINIMAL_STACK_SIZE                 ( ( unsigned short ) 80 )
