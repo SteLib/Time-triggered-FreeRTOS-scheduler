@@ -96,11 +96,27 @@ void vConfigureScheduler( TimelineConfig_t *cfg )
     /* --- Validate input ------------------------------------------------- */
     if( ( cfg == NULL ) || ( cfg->tasks == NULL ) || ( cfg->tasks_num == 0U ) )
     {
-        /* FIX: removed the stray second argument that was passed to a format
-         *      string with no matching specifier. */
         UART_printf( "Error: Timeline configuration not valid!\n" );
         return;
     }
+
+    /* --- CLEANUP PREVIOUS TEST TO PREVENT MEMORY CRASHES --- */
+    extern TaskHandle_t xFrameManagerHandle;
+    extern TimelineConfig_t *pxTimelineState;
+    
+    if (xFrameManagerHandle != NULL) {
+        vTaskDelete(xFrameManagerHandle);
+        xFrameManagerHandle = NULL;
+    }
+    if (pxTimelineState != NULL) {
+        for (uint32_t i = 0; i < pxTimelineState->tasks_num; i++) {
+            if (pxTimelineState->tasks[i].xHandle != NULL) {
+                vTaskDelete(pxTimelineState->tasks[i].xHandle);
+                pxTimelineState->tasks[i].xHandle = NULL;
+            }
+        }
+    }
+    /* ------------------------------------------------------- */
 
     /* Save the config pointer so tasks.c can reach it. */
     pxTimelineState = cfg;
@@ -210,14 +226,17 @@ static void vFrameManagerTask( void *pvParameters )
         UART_printf_ISR( "--- [ %d ms ] MAJOR FRAME RESET COMPLETE ---\n",
                          ( int ) xTaskGetTickCount() );
 
+        /* TELL THE TEST SUITE THE FRAME IS DONE (EVT_FRAME_RESET = 3) */
+        extern void vTestLogEvent(int eType, const char *pcName, uint32_t xTick, uint32_t ulFrameTick);
+        vTestLogEvent(3, "Frame_Mgr", xTaskGetTickCount(), 0);
+
         /*
          * Work is done – suspend ourselves.
-         * The tick hook will call xTaskResumeFromISR( xFrameManagerHandle )
-         * at the next now==0 boundary.
          */
         vTaskSuspend( NULL );
     }
 }
+
 
 /* -------------------------------------------------------------------------
  * vApplicationTickHook()

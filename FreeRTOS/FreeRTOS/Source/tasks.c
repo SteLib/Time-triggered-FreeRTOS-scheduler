@@ -5040,10 +5040,14 @@ BaseType_t xTaskIncrementTick( void )
                 else if (now == t->ulEnd_time) {
                     if (pxCurrentTCB == (TCB_t*)t->xHandle) {
                         
-                        /* --- 1. LOG THE DEADLINE MISS --- */
                         extern void UART_printf_ISR(const char *s, ...);
-                        UART_printf_ISR("[ %d ms ] %s deadline miss → terminated\n", 
-                                        xTickCount, pxCurrentTCB->pcTaskName);
+                        UART_printf_ISR("[ %d ms ] %s deadline miss -> terminated\n", 
+                                        (int)xTickCount, pxCurrentTCB->pcTaskName);
+
+                        /* USE THE ISR-SAFE LOGGER HERE */
+                        extern void vTestLogEventFromISR(int eType, const char *pcName, uint32_t xTick, uint32_t ulFrameTick);
+                        vTestLogEventFromISR(2, pxCurrentTCB->pcTaskName, xTickCount, now);
+
 
                         /* --- 2. THE KERNEL FIX: FORCE SUSPEND --- */
                         t->is_completed = 1;
