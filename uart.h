@@ -18,6 +18,8 @@ void UART_init(void);
 // void UART_printf(const char *s);
 void UART_printf(const char *s, ...);
 
+void UART_printf_ISR(const char *s, ...);
+
 #endif
 
 

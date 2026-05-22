@@ -94,3 +94,30 @@ void UART_printf( const char *s, ... )
     /* IMPORTANTE: Devi uscire dalla sezione critica o il sistema si blocca! */
     taskEXIT_CRITICAL();
 }
+
+void UART_printf_ISR( const char *s, ... )
+{
+    va_list args;
+    va_start( args, s );
+
+    while (*s != '\0') 
+    {
+        if (*s == '%') 
+        {
+            s++; 
+            if (*s == 'd' || *s == 'i') {
+                UART_print_int( va_arg( args, int ) );
+            } else if (*s == 's') {
+                char *string = va_arg( args, char* );
+                UART_print_string( string ? string : "(null)" );
+            }
+            s++; 
+        }
+        else
+        {
+            UART0_DATA = (unsigned int)(*s);
+            s++;
+        }
+    }
+    va_end( args );
+}

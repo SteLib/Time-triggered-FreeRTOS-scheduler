@@ -5003,7 +5003,6 @@ BaseType_t xTaskIncrementTick( void )
                 TimelineTaskConfig_t* t = &pxTimelineState->tasks[i];
                 t->is_completed = 0;
                 
-                // Risvegliamo subito gli SRT. Partiranno quando gli HRT dormiranno.
                 if (t->type == SOFT_RT && t->xHandle != NULL) {
                     if (xTaskResumeFromISR(t->xHandle) == pdTRUE) {
                         xSwitchRequired = pdTRUE;
@@ -5015,46 +5014,51 @@ BaseType_t xTaskIncrementTick( void )
         for (uint32_t i = 0; i < pxTimelineState->tasks_num; i++) {
             TimelineTaskConfig_t* t = &pxTimelineState->tasks[i];
 
-            // Gestiamo la schedulazione dei task Hard Real-Time
             if (t->type == HARD_RT) {
                 
                 // 1. È IL MOMENTO DI PARTIRE: Risvegliamo il task
                 if (now == t->ulStart_time) {
                     t->is_completed = 0;
-                    
                     if (t->xHandle != NULL) {
-                        // We are inside the interrupt SysTick, WE USE THE VERSION FromISR
                         if (xTaskResumeFromISR(t->xHandle) == pdTRUE) {
-                            xSwitchRequired = pdTRUE; // Force the context switch to run the task immediately if it has higher priority 
+                            xSwitchRequired = pdTRUE;
                         }
                     }
                 }
                 
                 // 2. END TIME (Deadline Enforcement)
                 else if (now == t->ulEnd_time) {
-                    // WARNING: We do not use vTaskSuspend(t->xHandle) because
-                    // we are inside an interrupt (SysTick), and vTaskSuspend is not safe to call from an ISR.
-                    // We check that the task is still running (not completed) and if so, we set it as completed and force a context switch if it's currently running.
                     if (pxCurrentTCB == (TCB_t*)t->xHandle) {
+                        
+                        /* --- 1. LOG THE DEADLINE MISS --- */
+                        extern void UART_printf_ISR(const char *s, ...);
+                        UART_printf_ISR("[ %d ms ] %s deadline miss → terminated\n", 
+                                        xTickCount, pxCurrentTCB->pcTaskName);
+
+                        /* --- 2. THE KERNEL FIX: FORCE SUSPEND --- */
                         t->is_completed = 1;
-                        xSwitchRequired = pdTRUE; // Force context switch to move away from the task that has missed its deadline
+                        
+                        if( uxListRemove( &( pxCurrentTCB->xStateListItem ) ) == ( UBaseType_t ) 0 )
+                        {
+                            portRESET_READY_PRIORITY( pxCurrentTCB->uxPriority, uxTopReadyPriority );
+                        }
+                        vListInsertEnd( &xSuspendedTaskList, &( pxCurrentTCB->xStateListItem ) );
+                        
+                        xSwitchRequired = pdTRUE; 
                     }
                 }
             }
-        }
+        } // <--- CLOSES THE FOR LOOP
 
         // 3. Advancement of the tick in the current major frame
         current_tick_in_frame++;
         if (current_tick_in_frame >= pxTimelineState->major_frame_period) {
-            current_tick_in_frame = 0; // Riavvolgimento al nuovo frame
+            current_tick_in_frame = 0; 
         }
-    }
-    // =========================================================================
-    // END CUSTOM SCHEDULER LOGIC (TIME-TRIGGERED)
-    // =========================================================================
+    } // <--- CLOSES THE if (pxTimelineState != NULL) BLOCK
 
     return xSwitchRequired;
-}
+} // <--- CLOSES THE ENTIRE xTaskIncrementTick FUNCTION. THIS IS PROBABLY WHAT YOU ARE MISSING!
 /*-----------------------------------------------------------*/
 
 #if ( configUSE_APPLICATION_TASK_TAG == 1 )

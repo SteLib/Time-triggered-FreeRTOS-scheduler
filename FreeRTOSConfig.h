@@ -134,5 +134,23 @@
 
 #define configENABLE_BACKWARD_COMPATIBILITY 0
 
+#undef configUSE_TRACE_FACILITY
+#define configUSE_TRACE_FACILITY 1
+
+/* Provide access to the ISR-safe print function */
+extern void UART_printf_ISR(const char *s, ...);
+
+/* Macro: Fired exactly when a task is loaded onto the CPU */
+#define traceTASK_SWITCHED_IN() \
+    do { \
+        UART_printf_ISR("[ %d ms ] %s start\n", xTickCount, pxCurrentTCB->pcTaskName); \
+    } while(0)
+
+/* Macro: Fired exactly when a task is pulled off the CPU */
+#define traceTASK_SWITCHED_OUT() \
+    do { \
+        UART_printf_ISR("[ %d ms ] %s end\n", xTickCount, pxCurrentTCB->pcTaskName); \
+    } while(0)
+
 #endif /* FREERTOS_CONFIG_H */
 
