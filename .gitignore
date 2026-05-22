@@ -31,4 +31,5 @@ trace_output/
 ehthumbs.db
 Thumbs.db
 
+*.diff
 *.txt
