@@ -40,9 +40,11 @@
 #include "task.h"
 #include "timers.h"
 #include "stack_macros.h"
-// including our scheduling
+
 #include "scheduler.h"
-extern TimelineConfig_t* pxTimelineState;
+extern TimelineConfig_t  *pxTimelineState;
+extern TaskHandle_t       xFrameManagerHandle;
+
 
 /* The default definitions are only available for non-MPU ports. The
  * reason is that the stack alignment requirements vary for different
@@ -456,7 +458,7 @@ typedef struct tskTaskControlBlock       /* The old naming convention is used to
     // --- TIMELINE SCHEDULER FIELDS ---
     uint32_t ulStart_time;
     uint32_t ulEnd_time;
-    uint8_t Type; // 0 = HARD_RT, 1 = SOFT_RT
+    uint8_t  ucTaskType; // 0 = HARD_RT, 1 = SOFT_RT
     uint8_t is_completed;
 } tskTCB;
 
@@ -4985,9 +4987,7 @@ BaseType_t xTaskIncrementTick( void )
         #endif
     }
 
-    traceRETURN_xTaskIncrementTick( xSwitchRequired );
-
-   // ... codice nativo di xTaskIncrementTick ...
+    // ... codice nativo di xTaskIncrementTick ...
 
     // =========================================================================
     // INIZIO LOGICA CUSTOM SCHEDULER (TIME-TRIGGERED)
@@ -4999,6 +4999,16 @@ BaseType_t xTaskIncrementTick( void )
 
         // --- RESET MAJOR FRAME (Tick 0) ---
         if (now == 0) {
+            
+            // Wake up the Frame Manager Task (assuming you stored its handle globally)
+            extern TaskHandle_t xFrameManagerHandle; 
+            if (xFrameManagerHandle != NULL) {
+                if (xTaskResumeFromISR(xFrameManagerHandle) == pdTRUE) {
+                    xSwitchRequired = pdTRUE; // Switch to the manager instantly!
+                }
+            }
+
+            // Also wake up SRT tasks like before
             for (uint32_t i = 0; i < pxTimelineState->tasks_num; i++) {
                 TimelineTaskConfig_t* t = &pxTimelineState->tasks[i];
                 t->is_completed = 0;
@@ -5056,6 +5066,8 @@ BaseType_t xTaskIncrementTick( void )
             current_tick_in_frame = 0; 
         }
     } // <--- CLOSES THE if (pxTimelineState != NULL) BLOCK
+
+    traceRETURN_xTaskIncrementTick( xSwitchRequired );
 
     return xSwitchRequired;
 } // <--- CLOSES THE ENTIRE xTaskIncrementTick FUNCTION. THIS IS PROBABLY WHAT YOU ARE MISSING!
@@ -5253,26 +5265,11 @@ BaseType_t xTaskIncrementTick( void )
             /* MISRA Ref 11.5.3 [Void pointer assignment] */
             /* More details at: https://github.com/FreeRTOS/FreeRTOS-Kernel/blob/main/MISRA.md#rule-115 */
             /* coverity[misra_c_2012_rule_11_5_violation] */
-	    BaseType_t xHrtActive = pdFALSE;
-	    if( pxTimelineState != NULL ) {
-		    uint32_t now = xTickCount % pxTimelineState->major_frame_period;
+	        
+            taskSELECT_HIGHEST_PRIORITY_TASK();
+            traceTASK_SWITCHED_IN();
+ 
 
-		    for( uint32_t i = 0; i < pxTimelineState->tasks_num; i++ ) {
-			    TimelineTaskConfig_t* t = &pxTimelineState->tasks[i];
-			    if (t->type == HARD_RT) {
-			            // Un HRT domina la CPU se siamo nella sua finestra e non ha finito
-			            if (now >= t->ulStart_time && now < t->ulEnd_time && t->is_completed == 0) {
-					    pxCurrentTCB = (TCB_t *) t->xHandle;
-					    xHrtActive = pdTRUE;
-					    break;
-				    }
-		    	    }
-		    }
-	    }
-
-	    if( xHrtActive == pdFALSE ) {
-        	    taskSELECT_HIGHEST_PRIORITY_TASK();
-	    }
 
             traceTASK_SWITCHED_IN();
 
@@ -8969,13 +8966,22 @@ void vTaskResetState( void )
 }
 /*-----------------------------------------------------------*/
 
-void vTaskSetTimelineConfig(TaskHandle_t xTask, uint32_t ulStart, uint32_t ulEnd, uint8_t type) {
-    TCB_t* pxTCB = (TCB_t*) xTask;
-    if(pxTCB) {
-        pxTCB->ulStart_time = ulStart;
-        pxTCB->ulEnd_time = ulEnd;
-        pxTCB->Type = type;
-        pxTCB->is_completed = 0;
+/* -------------------------------------------------------------------------
+ * vTaskSetTimelineConfig()
+ * ---------------------------------------------------------------------- */
+void vTaskSetTimelineConfig( TaskHandle_t xTask,
+                             uint32_t ulStart,
+                             uint32_t ulEnd,
+                             uint8_t type )
+{
+    TCB_t *pxTCB = ( TCB_t * ) xTask;
+
+    if( pxTCB != NULL )
+    {
+        pxTCB->ulStart_time  = ulStart;
+        pxTCB->ulEnd_time    = ulEnd;
+        pxTCB->ucTaskType    = type;
+        pxTCB->is_completed  = 0U;
     }
 }
-/*-----------------------------------------------------------*/
+

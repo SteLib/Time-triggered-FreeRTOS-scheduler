@@ -21,36 +21,45 @@
  *
  * https://www.FreeRTOS.org
  * https://github.com/FreeRTOS
- *
  */
 
 #ifndef FREERTOS_CONFIG_H
 #define FREERTOS_CONFIG_H
 
 /*-----------------------------------------------------------
-* Application specific definitions.
-*
-* These definitions should be adjusted for your particular hardware and
-* application requirements.
-*
-* THESE PARAMETERS ARE DESCRIBED WITHIN THE 'CONFIGURATION' SECTION OF THE
-* FreeRTOS API DOCUMENTATION AVAILABLE ON THE FreeRTOS.org WEB SITE.
-*
-* See http://www.freertos.org/a00110.html
-*----------------------------------------------------------*/
+ * Application specific definitions.
+ *
+ * These definitions should be adjusted for your particular hardware and
+ * application requirements.
+ *
+ * THESE PARAMETERS ARE DESCRIBED WITHIN THE 'CONFIGURATION' SECTION OF THE
+ * FreeRTOS API DOCUMENTATION AVAILABLE ON THE FreeRTOS.org WEB SITE.
+ *
+ * See http://www.freertos.org/a00110.html
+ *----------------------------------------------------------*/
 
-#define configUSE_TRACE_FACILITY                 0
+/* FIX: configUSE_TRACE_FACILITY was defined twice (first 0, then 1 via
+ *      #undef + redefine at the bottom of the file).  Consolidated here
+ *      as a single definition set to 1, which is required for the
+ *      traceTASK_SWITCHED_IN / traceTASK_SWITCHED_OUT macros below. */
+#define configUSE_TRACE_FACILITY                 1
 #define configGENERATE_RUN_TIME_STATS            0
 
 #define configUSE_PREEMPTION                     1
 #define configUSE_IDLE_HOOK                      0
-#define configUSE_TICK_HOOK                      0 // to allow the scheduler to manage the execution of tasks based on the subframe timing
+
+/* FIX: configUSE_TICK_HOOK must be 1 so vApplicationTickHook() is called.
+ *      The original file had it set to 0 with a comment saying the scheduler
+ *      would use it – that is contradictory.  Our scheduler logic is in the
+ *      tasks.c patch (xTaskIncrementTick), so the hook itself is a no-op, but
+ *      setting it to 1 avoids linker issues if it is ever needed in future. */
+#define configUSE_TICK_HOOK                      1
+
 #define configCPU_CLOCK_HZ                       ( ( unsigned long ) 25000000 )
 #define configTICK_RATE_HZ                       ( ( TickType_t ) 1000 )
 #define configMINIMAL_STACK_SIZE                 ( ( unsigned short ) 80 )
 #define configTOTAL_HEAP_SIZE                    ( ( size_t ) ( 60 * 1024 ) )
 #define configMAX_TASK_NAME_LEN                  ( 12 )
-#define configUSE_TRACE_FACILITY                 0
 #define configUSE_16_BIT_TICKS                   0
 #define configIDLE_SHOULD_YIELD                  0
 #define configUSE_CO_ROUTINES                    0
@@ -77,7 +86,6 @@
 
 /* Set the following definitions to 1 to include the API function, or zero
  * to exclude the API function. */
-
 #define INCLUDE_vTaskPrioritySet                  1
 #define INCLUDE_uxTaskPriorityGet                 1
 #define INCLUDE_vTaskDelete                       1
@@ -95,62 +103,58 @@
 #define INCLUDE_xTaskAbortDelay                   1
 #define INCLUDE_xTaskGetHandle                    1
 
-// disable time slicing to ensure that SRT tasks only run when HRT tasks are not running
-// and that the Idle task only runs when no other tasks are running.
-#define configUSE_TIME_SLICING					  0 
-/* This demo makes use of one or more example stats formatting functions. These
- * format the raw data provided by the uxTaskGetSystemState() function in to human
- * readable ASCII form.  See the notes in the implementation of vTaskList() within
- * FreeRTOS/Source/tasks.c for limitations. */
+/* Disable time-slicing: SRT tasks only run when no HRT task is ready,
+ * and the Idle task only runs when no other task is ready. */
+#define configUSE_TIME_SLICING                   0
+
+/* This demo makes use of one or more example stats formatting functions.  */
 #define configUSE_STATS_FORMATTING_FUNCTIONS      0
 
-#define configKERNEL_INTERRUPT_PRIORITY           ( 255 )        /* All eight bits as QEMU doesn't model the priority bits. */
+/* QEMU doesn't model priority bits fully, so use all eight. */
+#define configKERNEL_INTERRUPT_PRIORITY           ( 255 )
 
-#ifndef __IASMARM__ /* Prevent C code being included in IAR asm files. */
-	#define configASSERT( x ) if( ( x ) == 0 ) while(1);
+#ifndef __IASMARM__
+    #define configASSERT( x )    if( ( x ) == 0 ) while( 1 )
 #endif
 
+/* configMAX_SYSCALL_INTERRUPT_PRIORITY must not be zero. */
+#define configMAX_SYSCALL_INTERRUPT_PRIORITY      ( 4 )
 
-/* !!!! configMAX_SYSCALL_INTERRUPT_PRIORITY must not be set to zero !!!!
- * See http://www.FreeRTOS.org/RTOS-Cortex-M3-M4.html. */
-#define configMAX_SYSCALL_INTERRUPT_PRIORITY             ( 4 )
+/* QEMU doesn't model the CLZ instruction. */
+#define configUSE_PORT_OPTIMISED_TASK_SELECTION   0
 
-/* Use the Cortex-M3 optimised task selection rather than the generic C code
- * version. */
-#define configUSE_PORT_OPTIMISED_TASK_SELECTION          0 // QEMU doesn't model the CLZ instruction, so don't use the Cortex-M3 optimised task selection code.
-
-/* The Win32 target is capable of running all the tests tasks at the same
- * time. */
-#define configRUN_ADDITIONAL_TESTS                       1
-
-/* The test that checks the trigger level on stream buffers requires an
- * allowable margin of error on slower processors (slower than the Win32
- * machine on which the test is developed). */
-#define configSTREAM_BUFFER_TRIGGER_LEVEL_TEST_MARGIN    4
+#define configRUN_ADDITIONAL_TESTS                1
+#define configSTREAM_BUFFER_TRIGGER_LEVEL_TEST_MARGIN  4
 
 #define intqHIGHER_PRIORITY      ( configMAX_PRIORITIES - 5 )
 #define bktPRIMARY_PRIORITY      ( configMAX_PRIORITIES - 3 )
 #define bktSECONDARY_PRIORITY    ( configMAX_PRIORITIES - 4 )
 
-#define configENABLE_BACKWARD_COMPATIBILITY 0
+#define configENABLE_BACKWARD_COMPATIBILITY      0
 
-#undef configUSE_TRACE_FACILITY
-#define configUSE_TRACE_FACILITY 1
+/* -------------------------------------------------------------------------
+ * Trace macros
+ *
+ * UART_printf_ISR is ISR-safe (no critical section, no FreeRTOS API calls).
+ * Both macros fire inside the context-switch path, which is effectively ISR
+ * context, so only ISR-safe calls are permitted here.
+ * ---------------------------------------------------------------------- */
+extern void UART_printf_ISR( const char *s, ... );
 
-/* Provide access to the ISR-safe print function */
-extern void UART_printf_ISR(const char *s, ...);
+/* Fired exactly when a task is loaded onto the CPU. */
+#define traceTASK_SWITCHED_IN()                                              \
+    do {                                                                     \
+        UART_printf_ISR( "[ %d ms ] %s start\n",                            \
+                         ( int ) xTickCount,                                 \
+                         pxCurrentTCB->pcTaskName );                         \
+    } while( 0 )
 
-/* Macro: Fired exactly when a task is loaded onto the CPU */
-#define traceTASK_SWITCHED_IN() \
-    do { \
-        UART_printf_ISR("[ %d ms ] %s start\n", xTickCount, pxCurrentTCB->pcTaskName); \
-    } while(0)
-
-/* Macro: Fired exactly when a task is pulled off the CPU */
-#define traceTASK_SWITCHED_OUT() \
-    do { \
-        UART_printf_ISR("[ %d ms ] %s end\n", xTickCount, pxCurrentTCB->pcTaskName); \
-    } while(0)
+/* Fired exactly when a task is pulled off the CPU. */
+#define traceTASK_SWITCHED_OUT()                                             \
+    do {                                                                     \
+        UART_printf_ISR( "[ %d ms ] %s end\n",                              \
+                         ( int ) xTickCount,                                 \
+                         pxCurrentTCB->pcTaskName );                         \
+    } while( 0 )
 
 #endif /* FREERTOS_CONFIG_H */
-
