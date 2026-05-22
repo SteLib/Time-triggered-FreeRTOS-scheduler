@@ -5270,9 +5270,6 @@ BaseType_t xTaskIncrementTick( void )
             traceTASK_SWITCHED_IN();
  
 
-
-            traceTASK_SWITCHED_IN();
-
             /* Macro to inject port specific behaviour immediately after
              * switching tasks, such as setting an end of stack watchpoint
              * or reconfiguring the MPU. */
